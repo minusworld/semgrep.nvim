@@ -1,74 +1,104 @@
+local config = require("semgrep.config")
+
 local M = {}
 
-local ns = vim.api.nvim_create_namespace("semgrep_plugin")
+-- Re-exported submodules for programmatic use.
+M.scan = require("semgrep.scan")
+M.fix = require("semgrep.fix")
+M.hover = require("semgrep.hover")
+M.pickers = require("semgrep.pickers")
+M.store = require("semgrep.store")
 
-local function get_severity(semgrep_sev)
-  if semgrep_sev == "ERROR" then return vim.diagnostic.severity.ERROR end
-  if semgrep_sev == "WARNING" then return vim.diagnostic.severity.WARN end
-  return vim.diagnostic.severity.INFO
-end
-
-function M.scan_current_file()
-  local bufnr = vim.api.nvim_get_current_buf()
-  local file_path = vim.api.nvim_buf_get_name(bufnr)
-
-  if file_path == "" or vim.bo[bufnr].buftype -= "" then return end
-
-  local stdout_data = {}
-
-  local cmd = { "semgrep", "scan", "--config-auto", "--json", "--quiet", file_path }
-
-  vim.system(cmd, { text = true }, function(obj)
-    vim.schedule(function()
-      if obj.code -= 0 and obj.stderr -= "" then
-        vim.notify("Semgrep Error: " .. obj.stderr, vim.log.levels.ERROR)
-      end
-
-    local success, decode = pcall(vim.json.decode, obj.stdout)
-    if not success or not decode or not decode.results then
-      vim.diagnostics.set(ns, bufnr, {}) -- clear diagnostics if parsing fails
-      return
-    end
-
-    local diagnostics = {}
-  for _, match in ipairs(decoded.results) do
-  table.insert(diagnostics, {
-    buffnr = bufnr,
-    lnum = match.start.line - 1,
-    col = match.start.col - 1,
-    end_lnum = match["end"].line - 1,
-    end_col = match["end"].col -1,
-    severity = get_severity(match.extra.severity),
-    message = match.extra.message,
-    source = "Semgrep",
-    code = match.check_id,
-  })
+--- Toggle the autofix-on-scan behaviour at runtime.
+---@param enabled boolean|nil When nil, flips current value.
+function M.toggle_autofix(enabled)
+  if enabled == nil then
+    enabled = not config.options.autofix
   end
-
-  vim.diagnostic.set(ns, bufnr, diagnostics)
-  end)
-  end)
+  config.options.autofix = enabled
+  vim.notify("semgrep: autofix " .. (enabled and "enabled" or "disabled"))
 end
 
-function M.setup(opts)
-  opts = opts or {}
+--- Toggle documentation-link virtual text and redraw the current buffer.
+---@param enabled boolean|nil
+function M.toggle_virtual_text(enabled)
+  if enabled == nil then
+    enabled = not config.options.virtual_text_links
+  end
+  config.options.virtual_text_links = enabled
+  M.hover.refresh_virtual_text()
+  vim.notify("semgrep: doc-link virtual text " .. (enabled and "enabled" or "disabled"))
+end
 
-  vim.api.nvim_create_user_command("SemgrepScan", function ()
-    M.scan_current_file()
-  end, {})
-    
-  if opts.scan_on_save then
-    local group = vim.api.nvim_create_augroup(SemgrepAutoScan, {clear = true})
+local function create_commands()
+  vim.api.nvim_create_user_command("SemgrepScan", function()
+    M.scan.scan_current_file()
+  end, { desc = "Semgrep: scan the current file" })
+
+  vim.api.nvim_create_user_command("SemgrepScanWorkspace", function(args)
+    local root = args.args ~= "" and args.args or nil
+    M.scan.scan_workspace(root, function(findings)
+      M.pickers.open(findings)
+    end)
+  end, { nargs = "?", complete = "dir", desc = "Semgrep: scan the workspace and open the picker" })
+
+  vim.api.nvim_create_user_command("SemgrepFindings", function()
+    M.pickers.open()
+  end, { desc = "Semgrep: open the last findings in telescope/quickfix" })
+
+  vim.api.nvim_create_user_command("SemgrepQuickfix", function()
+    M.pickers.to_quickfix()
+  end, { desc = "Semgrep: send findings to the quickfix list" })
+
+  vim.api.nvim_create_user_command("SemgrepFix", function()
+    M.fix.fix_buffer()
+  end, { desc = "Semgrep: apply all autofixes in the current buffer" })
+
+  vim.api.nvim_create_user_command("SemgrepFixCursor", function()
+    M.fix.fix_at_cursor()
+  end, { desc = "Semgrep: apply the autofix under the cursor" })
+
+  vim.api.nvim_create_user_command("SemgrepHover", function()
+    M.hover.hover()
+  end, { desc = "Semgrep: show finding details + doc links under the cursor" })
+
+  vim.api.nvim_create_user_command("SemgrepToggleAutofix", function()
+    M.toggle_autofix()
+  end, { desc = "Semgrep: toggle autofix-on-scan" })
+
+  vim.api.nvim_create_user_command("SemgrepToggleLinks", function()
+    M.toggle_virtual_text()
+  end, { desc = "Semgrep: toggle doc-link virtual text" })
+end
+
+local function create_autocmds()
+  local group = vim.api.nvim_create_augroup("SemgrepNvim", { clear = true })
+
+  if config.options.scan_on_save then
     vim.api.nvim_create_autocmd("BufWritePost", {
       group = group,
-      callback = function()
-        M.scan_current_file()
+      callback = function(ev)
+        M.scan.scan_current_file(ev.buf)
       end,
+      desc = "Semgrep: scan on save",
     })
   end
+
+  -- Keep doc-link virtual text in sync when a scanned file is shown.
+  vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost" }, {
+    group = group,
+    callback = function(ev)
+      M.hover.refresh_virtual_text(ev.buf)
+    end,
+    desc = "Semgrep: refresh doc-link virtual text",
+  })
 end
-  
+
+---@param opts SemgrepConfig|nil
+function M.setup(opts)
+  config.setup(opts)
+  create_commands()
+  create_autocmds()
+end
+
 return M
-
-
-
