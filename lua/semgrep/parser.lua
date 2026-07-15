@@ -10,6 +10,8 @@ local M = {}
 ---@field start { line: integer, col: integer } 1-based line, 1-based col.
 ---@field finish { line: integer, col: integer } 1-based line, 1-based col (exclusive col).
 ---@field fix string|nil Replacement text from `match.extra.fix`.
+---@field lines string|nil Full source text of matched lines.
+---@field metavars table|nil Captured metavariable names, positions, and content.
 ---@field links string[] Documentation links from `match.extra.metadata.links`.
 ---@field metadata table Raw `match.extra.metadata`.
 
@@ -67,6 +69,8 @@ function M.parse(stdout)
         col = match["end"] and match["end"].col or 1,
       },
       fix = extra.fix,
+      lines = extra.lines,
+      metavars = extra.metavars,
       links = links,
       metadata = metadata,
     })
