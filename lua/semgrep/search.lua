@@ -76,7 +76,9 @@ function M.search(opts)
       M.last_results = findings
       M.last_pattern = pattern
       vim.notify(("semgrep: %d match(es) found"):format(#findings))
-      require("semgrep.pickers").open_search(findings, pattern)
+      vim.schedule(function()
+        require("semgrep.pickers").open_search(findings, pattern)
+      end)
     end)
   end
 
