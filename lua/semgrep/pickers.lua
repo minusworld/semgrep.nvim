@@ -116,4 +116,90 @@ function M.open(findings)
   end
 end
 
+--- Send search results to the quickfix list, showing matched source lines.
+---@param findings SemgrepFinding[]
+function M.to_quickfix_search(findings)
+  local items = {}
+  for _, f in ipairs(findings) do
+    local matched_line = (f.lines or ""):gsub("^%s+", "")
+    table.insert(items, {
+      filename = f.path,
+      lnum = f.start.line,
+      col = f.start.col,
+      text = matched_line,
+      type = "I",
+    })
+  end
+
+  vim.fn.setqflist({}, " ", { title = "Semgrep Search", items = items })
+  if #items > 0 then
+    vim.cmd("copen")
+  else
+    vim.notify("semgrep: no matches", vim.log.levels.INFO)
+  end
+end
+
+--- Open search results in a Telescope picker optimized for pattern matches.
+---@param findings SemgrepFinding[]
+---@param pattern string
+function M.to_telescope_search(findings, pattern)
+  local has_telescope, pickers = pcall(require, "telescope.pickers")
+  if not (has_telescope and config.options.use_telescope) then
+    return M.to_quickfix_search(findings)
+  end
+
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+
+  pickers
+    .new({}, {
+      prompt_title = "Semgrep Search: " .. pattern,
+      finder = finders.new_table({
+        results = findings,
+        entry_maker = function(f)
+          local short_path = vim.fn.fnamemodify(f.path, ":~:.")
+          local matched_line = (f.lines or ""):gsub("^%s+", "")
+          local display = ("%s:%d  %s"):format(short_path, f.start.line, matched_line)
+          return {
+            value = f,
+            display = display,
+            ordinal = short_path .. " " .. matched_line,
+            filename = f.path,
+            lnum = f.start.line,
+            col = f.start.col,
+          }
+        end,
+      }),
+      sorter = conf.generic_sorter({}),
+      previewer = conf.qflist_previewer({}),
+      attach_mappings = function(prompt_bufnr)
+        actions.select_default:replace(function()
+          actions.close(prompt_bufnr)
+          local entry = action_state.get_selected_entry()
+          if not entry then
+            return
+          end
+          local f = entry.value
+          vim.cmd("edit " .. vim.fn.fnameescape(f.path))
+          vim.api.nvim_win_set_cursor(0, { f.start.line, math.max(f.start.col - 1, 0) })
+        end)
+        return true
+      end,
+    })
+    :find()
+end
+
+--- Open search results using the configured sink.
+---@param findings SemgrepFinding[]
+---@param pattern string
+function M.open_search(findings, pattern)
+  if config.options.use_telescope then
+    M.to_telescope_search(findings, pattern)
+  else
+    M.to_quickfix_search(findings)
+  end
+end
+
 return M

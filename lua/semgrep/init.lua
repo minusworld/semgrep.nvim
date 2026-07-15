@@ -8,6 +8,7 @@ M.fix = require("semgrep.fix")
 M.hover = require("semgrep.hover")
 M.pickers = require("semgrep.pickers")
 M.store = require("semgrep.store")
+M.search = require("semgrep.search")
 
 --- Toggle the autofix-on-scan behaviour at runtime.
 ---@param enabled boolean|nil When nil, flips current value.
@@ -69,6 +70,11 @@ local function create_commands()
   vim.api.nvim_create_user_command("SemgrepToggleLinks", function()
     M.toggle_virtual_text()
   end, { desc = "Semgrep: toggle doc-link virtual text" })
+
+  vim.api.nvim_create_user_command("SemgrepSearch", function(args)
+    local pattern = args.args ~= "" and args.args or nil
+    require("semgrep.search").search({ pattern = pattern })
+  end, { nargs = "?", desc = "Semgrep: search for a code pattern in the workspace" })
 end
 
 local function create_autocmds()
