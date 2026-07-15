@@ -121,7 +121,7 @@ end
 function M.to_quickfix_search(findings)
   local items = {}
   for _, f in ipairs(findings) do
-    local matched_line = (f.lines or ""):gsub("^%s+", "")
+    local matched_line = (f.lines or ""):gsub("\n", " "):gsub("^%s+", "")
     table.insert(items, {
       filename = f.path,
       lnum = f.start.line,
@@ -160,7 +160,7 @@ function M.to_telescope_search(findings, pattern)
         results = findings,
         entry_maker = function(f)
           local short_path = vim.fn.fnamemodify(f.path, ":~:.")
-          local matched_line = (f.lines or ""):gsub("^%s+", "")
+          local matched_line = (f.lines or ""):gsub("\n", " "):gsub("^%s+", "")
           local display = ("%s:%d  %s"):format(short_path, f.start.line, matched_line)
           return {
             value = f,
