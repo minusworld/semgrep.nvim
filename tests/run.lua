@@ -4,5 +4,6 @@ vim.opt.rtp:prepend("tests")
 require("tests.test_languages")
 require("tests.test_parser")
 require("tests.test_search")
+require("tests.test_input")
 
 require("tests.helpers").summary()

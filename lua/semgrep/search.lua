@@ -85,7 +85,10 @@ function M.search(opts)
   if opts.pattern then
     do_search(opts.pattern)
   else
-    vim.ui.input({ prompt = "Semgrep pattern (-l " .. lang .. "): " }, do_search)
+    require("semgrep.input").open({
+      lang = lang,
+      title = " Semgrep Pattern (-l " .. lang .. ") ",
+    }, do_search)
   end
 end
 
