@@ -155,7 +155,7 @@ function M.to_telescope_search(findings, pattern)
 
   pickers
     .new({}, {
-      prompt_title = "Semgrep Search: " .. pattern,
+      prompt_title = "Semgrep Search: " .. pattern:gsub("\n", " "),
       sorting_strategy = "ascending",
       finder = finders.new_table({
         results = findings,
